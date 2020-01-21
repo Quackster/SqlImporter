@@ -70,11 +70,13 @@ namespace SqlImporter
 
                 int nextCatalogueItemsId;
                 int nextItemsDefinitionsId;
+                int nextPageId;
 
                 using (var connection = GetConnection())
                 {
-                     nextCatalogueItemsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_items'");
-                     nextItemsDefinitionsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'items_definitions'");
+                    nextCatalogueItemsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_items'");
+                    nextItemsDefinitionsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'items_definitions'");
+                    nextPageId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_pages'");
 
                     Console.WriteLine("Query success: " + nextItemsDefinitionsId + " / " + nextCatalogueItemsId);
                 }
@@ -116,7 +118,7 @@ namespace SqlImporter
                         sqlOutput.Append("\n");
 
                         sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
-                            "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', 'PAGE ID', 2, 2, 0, 0, 1, " +defId + ", '', 0);");
+                            "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " +defId + ", '', 0);");
 
                         sqlOutput.Append("\n");
                         sqlOutput.Append("\n");
