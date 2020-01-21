@@ -110,7 +110,7 @@ namespace SqlImporter
                         int catalogueItemsId = nextCatalogueItemsId + 1;
 
                         sqlOutput.Append("INSERT INTO `items_definitions` (`id`, `sprite`, `name`, `description`, `sprite_id`, `length`, `width`, `top_height`, `max_status`, `behaviour`, `interactor`, `is_tradable`, `is_recyclable`, `drink_ids`, `rental_time`, `allowed_rotations`) VALUES " +
-                            "(" + defId + ", '" + spriteData.SpriteId + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
+                            "(" + defId + ", '" + spriteData.FileName + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
                         
                         sqlOutput.Append("\n");
                         sqlOutput.Append("\n");
