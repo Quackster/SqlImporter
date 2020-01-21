@@ -55,6 +55,7 @@ namespace SqlImporter
     class Program
     {
         private static List<FurniItem> itemList = new List<FurniItem>();
+        private static List<FurniItem> officialItemList = new List<FurniItem>();
 
         static void Main(string[] args)
         {
@@ -67,6 +68,15 @@ namespace SqlImporter
                 {
                     itemList.Add(new FurniItem(stringArray));
                 }
+
+                fileContents = File.ReadAllText("official_furnidata.txt");
+                furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
+
+                foreach (var stringArray in furnidataList)
+                {
+                    officialItemList.Add(new FurniItem(stringArray));
+                }
+
 
                 int nextCatalogueItemsId;
                 int nextItemsDefinitionsId;
@@ -107,6 +117,18 @@ namespace SqlImporter
 
                     if (spriteData == null)
                     {
+                        var newFurniName = className.Replace("_cmp", "").Replace("_camp", "");
+
+                        if (newFurniName.EndsWith("cmp"))
+                        {
+                            newFurniName = newFurniName.TrimEnd("cmp".ToCharArray());
+                        }
+
+                        spriteData = RetrieveSpriteData(newFurniName, officialItemList);
+                    }
+
+                    if (spriteData == null)
+                    {
                         Console.WriteLine("Next sprite ID: " + GetNextAvaliableSpriteId(previousItem != null ? previousItem.SpriteId : 1000));
                         Console.WriteLine("The furni " + className + " has no furnidata");
                     }
@@ -134,7 +156,7 @@ namespace SqlImporter
                         previousItem = spriteData;
                     }
 
-                    processedFurni.Add(fileName);
+                    processedFurni.Add(className);
                     File.WriteAllText("items.sql", sqlOutput.ToString());
 
                     //Console.WriteLine(Path.GetFileName(file));
