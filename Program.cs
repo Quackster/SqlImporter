@@ -82,22 +82,26 @@ namespace SqlImporter
                 }
 
                 FurniItem previousItem = null;
-
                 StringBuilder sqlOutput = new StringBuilder();
+
+                List<string> processedFurni = new List<string>();
 
                 foreach (var file in Directory.GetFiles("ccts"))
                 {
                     var fileName = Path.GetFileName(file);
 
                     if (fileName.StartsWith("hh_furni_xx_s_"))
-                    {
-                        continue;
-                    }
+                        fileName = fileName.Replace("hh_furni_xx_s_", "hh_furni_xx_");
 
                     var className = fileName;
                     
                     className = fileName.Replace("hh_furni_xx_", "");
                     className = Path.GetFileNameWithoutExtension(className);
+
+                    if (processedFurni.Count(sprite => sprite == className) > 0)
+                    {
+                        continue;
+                    }
 
                     var spriteData = RetrieveSpriteData(className, itemList);
 
@@ -108,8 +112,8 @@ namespace SqlImporter
                     }
                     else
                     {
-                        int defId = nextItemsDefinitionsId + 1;
-                        int catalogueItemsId = nextCatalogueItemsId + 1;
+                        int defId = nextItemsDefinitionsId;
+                        int catalogueItemsId = nextCatalogueItemsId;
 
                         sqlOutput.Append("INSERT INTO `items_definitions` (`id`, `sprite`, `name`, `description`, `sprite_id`, `length`, `width`, `top_height`, `max_status`, `behaviour`, `interactor`, `is_tradable`, `is_recyclable`, `drink_ids`, `rental_time`, `allowed_rotations`) VALUES " +
                             "(" + defId + ", '" + spriteData.FileName + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
@@ -130,6 +134,7 @@ namespace SqlImporter
                         previousItem = spriteData;
                     }
 
+                    processedFurni.Add(fileName);
                     File.WriteAllText("items.sql", sqlOutput.ToString());
 
                     //Console.WriteLine(Path.GetFileName(file));
