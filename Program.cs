@@ -23,6 +23,15 @@ namespace SqlImporter
         public string Colour;
         public string Name;
         public string Description;
+        public string[] RawData
+        {
+            get
+            {
+                return new string[] { Type, Convert.ToString(SpriteId), FileName, Revision, Unknown, Length == -1 ? "" : Convert.ToString(Length), Width == -1 ? "" : Convert.ToString(Width), Colour, Name, Description };
+            }
+        }
+
+        public bool Ignore;
 
         public FurniItem(string[] data)
         {
@@ -38,7 +47,8 @@ namespace SqlImporter
             }
             catch (Exception ex)
             {
-                
+                this.Length = -1;
+                this.Width = -1;
             }
 
             this.Colour = data[7];
@@ -49,6 +59,7 @@ namespace SqlImporter
         public FurniItem(int SpriteId)
         {
             this.SpriteId = SpriteId;
+            this.Ignore = true;
         }
     }
 
@@ -61,7 +72,7 @@ namespace SqlImporter
         {
             try
             {
-                string fileContents = File.ReadAllText("furnidata.txt");
+                var fileContents = File.ReadAllText("furnidata.txt");
                 var furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
 
                 foreach (var stringArray in furnidataList)
@@ -69,10 +80,10 @@ namespace SqlImporter
                     itemList.Add(new FurniItem(stringArray));
                 }
 
-                fileContents = File.ReadAllText("official_furnidata.txt");
-                furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
+                var officialFileContents = File.ReadAllText("official_furnidata.txt");
+                var officialFurnidataList = JsonConvert.DeserializeObject<List<string[]>>(officialFileContents);
 
-                foreach (var stringArray in furnidataList)
+                foreach (var stringArray in officialFurnidataList)
                 {
                     officialItemList.Add(new FurniItem(stringArray));
                 }
@@ -113,10 +124,12 @@ namespace SqlImporter
                         continue;
                     }
 
+                    bool addFurniDataLine = false;
                     var spriteData = RetrieveSpriteData(className, itemList);
 
                     if (spriteData == null)
                     {
+                        var originalFileName = className;
                         var newFurniName = className.Replace("_cmp", "").Replace("_camp", "");
 
                         if (newFurniName.EndsWith("cmp"))
@@ -125,6 +138,36 @@ namespace SqlImporter
                         }
 
                         spriteData = RetrieveSpriteData(newFurniName, officialItemList);
+
+                        if (spriteData != null)
+                        {
+                            if (originalFileName != newFurniName)
+                            {
+                                var newFurni = new FurniItem(spriteData.RawData);
+                                newFurni.FileName = originalFileName;
+                                newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
+
+                                if (itemList.Count(item => item.SpriteId == spriteData.SpriteId) > 0)
+                                {
+                                    newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
+                                }
+
+                                spriteData = newFurni;
+                                itemList.Add(newFurni);
+                            }
+                            else
+                            {
+                                var newFurni = new FurniItem(spriteData.RawData);
+
+                                if (itemList.Count(item => item.SpriteId == spriteData.SpriteId) > 0)
+                                {
+                                    newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
+                                }
+
+                                spriteData = newFurni;
+                                itemList.Add(newFurni);
+                            }
+                        }
                     }
 
                     if (spriteData == null)
@@ -161,6 +204,8 @@ namespace SqlImporter
 
                     //Console.WriteLine(Path.GetFileName(file));
                 }
+                
+                RebuildFurnidata(itemList, "new_furnidata.txt");
             }
             catch (Exception ex)
             {
@@ -169,6 +214,27 @@ namespace SqlImporter
 
             Console.WriteLine("Done!");
             Console.Read();
+        }
+
+        private static void RebuildFurnidata(List<FurniItem> itemList, string fileName)
+        {
+            List<string> furniEntry = new List<string>();
+
+            foreach (var item in itemList)
+            {
+                if (item.Ignore)
+                    continue;
+
+                string fileOutput = "";
+
+                fileOutput += "[\"";
+                fileOutput += string.Join("\",\"", item.RawData.Take<string>(10));
+                fileOutput += "\"]";
+
+                furniEntry.Add(fileOutput);
+            }
+
+            File.WriteAllText(fileName, "[" + string.Join(",", furniEntry) + "]");
         }
 
         private static string Escape(string name)
