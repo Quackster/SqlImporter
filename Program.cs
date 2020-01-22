@@ -97,7 +97,7 @@ namespace SqlImporter
                 {
                     nextCatalogueItemsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_items'");
                     nextItemsDefinitionsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'items_definitions'");
-                    nextPageId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_pages'");
+                    nextPageId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_pages'") - 1;
 
                     Console.WriteLine("Query success: " + nextItemsDefinitionsId + " / " + nextCatalogueItemsId);
                 }
@@ -105,6 +105,7 @@ namespace SqlImporter
                 FurniItem previousItem = null;
                 StringBuilder sqlOutput = new StringBuilder();
 
+                List<string> processQueue = new List<string>();
                 List<string> processedFurni = new List<string>();
 
                 foreach (var file in Directory.GetFiles("ccts"))
@@ -114,17 +115,57 @@ namespace SqlImporter
                     if (fileName.StartsWith("hh_furni_xx_s_"))
                         fileName = fileName.Replace("hh_furni_xx_s_", "hh_furni_xx_");
 
+                    if (fileName.StartsWith("o_"))
+                        fileName = fileName.Replace("o_", "hh_furni_xx_");
+
                     var className = fileName;
-                    
+
                     className = fileName.Replace("hh_furni_xx_", "");
                     className = Path.GetFileNameWithoutExtension(className);
 
+                    if (className.Contains("#"))
+                    {
+                        string contents = className.Substring(className.IndexOf("#") + 1);
+
+                        if (contents.Contains("-"))
+                        {
+                            string[] data = contents.Split('-');
+
+                            int minimumRange = int.Parse(data[0]);
+                            int maximumRange = int.Parse(data[1]);
+
+                            for (int i = minimumRange; i <= maximumRange; i++)
+                            {
+                                var newClass = className.Replace("#" + minimumRange + "-" + maximumRange, "*" + i);
+
+                            }
+                        }
+                        else
+                        {
+                            className = className.Replace("#", "*");
+                            processQueue.Add(className);
+                        }
+                    }
+                    else
+                    {
+                        processQueue.Add(className);
+                    }
+                    //Console.WriteLine(Path.GetFileName(file));
+                }
+
+                foreach (var className in processQueue)
+                {
                     if (processedFurni.Count(sprite => sprite == className) > 0)
                     {
                         continue;
                     }
 
-                    bool addFurniDataLine = false;
+                    if (HasItemEntry(className))
+                    {
+                        Console.WriteLine("The entry for " + className + " already exists in the database");
+                        continue;
+                    }
+
                     var spriteData = RetrieveSpriteData(className, itemList);
 
                     if (spriteData == null)
@@ -152,6 +193,8 @@ namespace SqlImporter
                                     newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
                                 }
 
+                                Console.WriteLine(" " + originalFileName + " missing but added");
+
                                 spriteData = newFurni;
                                 itemList.Add(newFurni);
                             }
@@ -163,6 +206,8 @@ namespace SqlImporter
                                 {
                                     newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
                                 }
+
+                                Console.WriteLine(originalFileName + " recalculated sprite id");
 
                                 spriteData = newFurni;
                                 itemList.Add(newFurni);
@@ -182,12 +227,12 @@ namespace SqlImporter
 
                         sqlOutput.Append("INSERT INTO `items_definitions` (`id`, `sprite`, `name`, `description`, `sprite_id`, `length`, `width`, `top_height`, `max_status`, `behaviour`, `interactor`, `is_tradable`, `is_recyclable`, `drink_ids`, `rental_time`, `allowed_rotations`) VALUES " +
                             "(" + defId + ", '" + spriteData.FileName + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
-                        
+
                         sqlOutput.Append("\n");
                         sqlOutput.Append("\n");
 
                         sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
-                            "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " +defId + ", '', 0);");
+                            "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " + defId + ", '', 0);");
 
                         sqlOutput.Append("\n");
                         sqlOutput.Append("\n");
@@ -200,11 +245,9 @@ namespace SqlImporter
                     }
 
                     processedFurni.Add(className);
-                    File.WriteAllText("items.sql", sqlOutput.ToString());
-
-                    //Console.WriteLine(Path.GetFileName(file));
                 }
-                
+
+                File.WriteAllText("items.sql", sqlOutput.ToString());
                 RebuildFurnidata(itemList, "new_furnidata.txt");
             }
             catch (Exception ex)
@@ -214,6 +257,17 @@ namespace SqlImporter
 
             Console.WriteLine("Done!");
             Console.Read();
+        }
+
+        private static bool HasItemEntry(string className)
+        {
+            using (var connection = GetConnection())
+            {
+                var queryParameters = new DynamicParameters();
+                queryParameters.Add("@sprite", className);
+
+                return connection.QueryFirstOrDefault<string>("SELECT behaviour FROM items_definitions WHERE sprite = @sprite", queryParameters) != null;
+            }
         }
 
         private static void RebuildFurnidata(List<FurniItem> itemList, string fileName)
