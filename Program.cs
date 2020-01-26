@@ -8,10 +8,11 @@ using Dapper;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using SqlImporter.Products;
 
 namespace SqlImporter
 {
-    class FurniItem
+    public class FurniItem
     {
         public string Type;
         public int SpriteId;
@@ -67,12 +68,13 @@ namespace SqlImporter
     {
         private static List<FurniItem> itemList = new List<FurniItem>();
         private static List<FurniItem> officialItemList = new List<FurniItem>();
+        internal static string OUTPUT_DIR = "data/";
 
         static void Main(string[] args)
         {
             try
             {
-                var fileContents = File.ReadAllText("furnidata.txt");
+                var fileContents = File.ReadAllText(OUTPUT_DIR + "old_furnidata.txt");
                 var furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
 
                 foreach (var stringArray in furnidataList)
@@ -80,7 +82,7 @@ namespace SqlImporter
                     itemList.Add(new FurniItem(stringArray));
                 }
 
-                var officialFileContents = File.ReadAllText("official_furnidata.txt");
+                var officialFileContents = File.ReadAllText(OUTPUT_DIR + "official_furnidata.txt");
                 var officialFurnidataList = JsonConvert.DeserializeObject<List<string[]>>(officialFileContents);
 
                 foreach (var stringArray in officialFurnidataList)
@@ -106,7 +108,7 @@ namespace SqlImporter
                 StringBuilder sqlOutput = new StringBuilder();
 
                 List<string> processQueue = new List<string>();
-                List<string> processedFurni = new List<string>();
+                List<FurniItem> processedFurni = new List<FurniItem>();
 
                 foreach (var file in Directory.GetFiles("ccts"))
                 {
@@ -137,6 +139,7 @@ namespace SqlImporter
                             for (int i = minimumRange; i <= maximumRange; i++)
                             {
                                 var newClass = className.Replace("#" + minimumRange + "-" + maximumRange, "*" + i);
+                                processQueue.Add(newClass);
 
                             }
                         }
@@ -155,14 +158,8 @@ namespace SqlImporter
 
                 foreach (var className in processQueue)
                 {
-                    if (processedFurni.Count(sprite => sprite == className) > 0)
+                    if (processedFurni.Count(sprite => sprite.FileName == className) > 0)
                     {
-                        continue;
-                    }
-
-                    if (HasItemEntry(className))
-                    {
-                        Console.WriteLine("The entry for " + className + " already exists in the database");
                         continue;
                     }
 
@@ -222,33 +219,42 @@ namespace SqlImporter
                     }
                     else
                     {
-                        int defId = nextItemsDefinitionsId;
-                        int catalogueItemsId = nextCatalogueItemsId;
+                        if (HasItemEntry(className))
+                        {
+                            Console.WriteLine("The entry for " + className + " already exists in the database");
+                        }
+                        else
+                        {
+                            int defId = nextItemsDefinitionsId;
+                            int catalogueItemsId = nextCatalogueItemsId;
 
-                        sqlOutput.Append("INSERT INTO `items_definitions` (`id`, `sprite`, `name`, `description`, `sprite_id`, `length`, `width`, `top_height`, `max_status`, `behaviour`, `interactor`, `is_tradable`, `is_recyclable`, `drink_ids`, `rental_time`, `allowed_rotations`) VALUES " +
-                            "(" + defId + ", '" + spriteData.FileName + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
+                            sqlOutput.Append("INSERT INTO `items_definitions` (`id`, `sprite`, `name`, `description`, `sprite_id`, `length`, `width`, `top_height`, `max_status`, `behaviour`, `interactor`, `is_tradable`, `is_recyclable`, `drink_ids`, `rental_time`, `allowed_rotations`) VALUES " +
+                                "(" + defId + ", '" + spriteData.FileName + "', '" + Escape(spriteData.Name) + "', '" + Escape(spriteData.Description) + "', " + spriteData.SpriteId + ", " + spriteData.Length + ", " + spriteData.Width + ", 0, '2', '" + (spriteData.Type == "i" ? "wall_item" : "solid") + "', 'default', 1, 1, '', -1, '0,2,4,6');");
 
-                        sqlOutput.Append("\n");
-                        sqlOutput.Append("\n");
+                            sqlOutput.Append("\n");
+                            sqlOutput.Append("\n");
 
-                        sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
-                            "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " + defId + ", '', 0);");
+                            sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
+                                "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " + defId + ", '', 0);");
 
-                        sqlOutput.Append("\n");
-                        sqlOutput.Append("\n");
+                            sqlOutput.Append("\n");
+                            sqlOutput.Append("\n");
 
 
-                        nextItemsDefinitionsId++;
-                        nextCatalogueItemsId++;
+                            nextItemsDefinitionsId++;
+                            nextCatalogueItemsId++;
 
-                        previousItem = spriteData;
+                            previousItem = spriteData;
+                        }
+
+                        processedFurni.Add(spriteData);
                     }
-
-                    processedFurni.Add(className);
                 }
 
-                File.WriteAllText("items.sql", sqlOutput.ToString());
-                RebuildFurnidata(itemList, "new_furnidata.txt");
+                ProductData.AddItems(processedFurni);
+
+                File.WriteAllText(OUTPUT_DIR + "items.sql", sqlOutput.ToString());
+                RebuildFurnidata(itemList, OUTPUT_DIR + "furnidata.txt");
             }
             catch (Exception ex)
             {
