@@ -82,7 +82,7 @@ namespace SqlImporter.Products
             }
 
             var finalOutput = "";
-            var chunks = splitList(productDataList);
+            var chunks = SplitList(productDataList);
 
             foreach (var chunk in chunks)
             {
@@ -136,7 +136,7 @@ namespace SqlImporter.Products
             Console.WriteLine("Read " + productList.Count + " products!");
         }
 
-        public static IEnumerable<List<T>> splitList<T>(List<T> locations, int nSize = 101)
+        public static IEnumerable<List<T>> SplitList<T>(List<T> locations, int nSize = 101)
         {
             for (int i = 0; i < locations.Count; i += nSize)
             {
