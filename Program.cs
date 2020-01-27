@@ -190,7 +190,9 @@ namespace SqlImporter
                                     newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
                                 }
 
-                                Console.WriteLine(" " + originalFileName + " missing but added");
+                                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                                Console.WriteLine("The furniture \"" + originalFileName + "\" was missing but has now been added");
+                                Console.ResetColor();
 
                                 spriteData = newFurni;
                                 itemList.Add(newFurni);
@@ -198,13 +200,17 @@ namespace SqlImporter
                             else
                             {
                                 var newFurni = new FurniItem(spriteData.RawData);
+                                bool recalculatedSpriteId = false;
 
                                 if (itemList.Count(item => item.SpriteId == spriteData.SpriteId) > 0)
                                 {
                                     newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
+                                    recalculatedSpriteId = true;
                                 }
 
-                                Console.WriteLine(originalFileName + " recalculated sprite id");
+                                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                                Console.WriteLine("The furniture \"" + originalFileName + "\" was missing but added and sprite id has been recalulated");
+                                Console.ResetColor();
 
                                 spriteData = newFurni;
                                 itemList.Add(newFurni);

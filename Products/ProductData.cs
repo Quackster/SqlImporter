@@ -51,13 +51,13 @@ namespace SqlImporter.Products
                 if (productList.Count(product => product.SaleCode == item.FileName) > 0)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Product " + item.FileName + " already exists!");
+                    Console.WriteLine("Product \"" + item.FileName + "\" already exists!");
                     Console.ResetColor();
                     continue;
                 }
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Added " + item.FileName + " to new productdata!");
+                Console.WriteLine("Added \"" + item.FileName + "\" to new productdata!");
                 Console.ResetColor();
 
                 productList.Add(new ProductDataEntry(item.FileName, item.Name, item.Description, ""));
