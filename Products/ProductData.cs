@@ -30,7 +30,12 @@ namespace SqlImporter.Products
                 return new string[] { SaleCode, Name, Description.Replace("&QUOTE&", "\"&QUOTE&\""), GraphicsData };
             }
         }
-   
+
+        public override string ToString()
+        {
+            return string.Join(", ", Output);
+        }
+
     }
 
     public class ProductData
@@ -117,11 +122,15 @@ namespace SqlImporter.Products
                 var reg = new Regex("\".*?\"");
                 var matches = reg.Matches(newProduct);
 
-                productList.Add(new ProductDataEntry(
-                    matches[0].Value, 
-                    matches[1].Value, 
-                    matches[2].Value, 
-                    matches[3].Value));
+                var entry = new ProductDataEntry(
+                    matches[0].Value,
+                    matches[1].Value,
+                    matches[2].Value,
+                    matches[3].Value);
+
+                productList.Add(entry);
+
+                
             }
 
             Console.WriteLine("Read " + productList.Count + " products!");
