@@ -40,11 +40,19 @@ namespace SqlImporter.Products
 
     public class ProductData
     {
+        private static List<FurniItem> processedItems = new List<FurniItem>();
         private static List<ProductDataEntry> productList = new List<ProductDataEntry>();
+
+        internal static List<ProductDataEntry> Items
+        {
+            get { return productList; }
+        }
 
         public static void AddItems(List<FurniItem> items)
         {
-            ReadProducts(Program.OUTPUT_DIR + "old_productdata.txt");
+            processedItems = items;
+
+            ReadProducts(Program.OUTPUT_DIR + "old_data/productdata.txt");
 
             foreach (var item in items)
             {
@@ -53,20 +61,95 @@ namespace SqlImporter.Products
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("Product \"" + item.FileName + "\" already exists!");
                     Console.ResetColor();
+                }
+                else
+                {
+
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("Added \"" + item.FileName + "\" to new productdata!");
+                    Console.ResetColor();
+                    
+                    productList.Add(new ProductDataEntry(item.FileName, item.Name, item.Description, ""));
+                }
+
+                
+            }
+        }
+
+        public static void HandleDeals()
+        {
+            while (true)
+            {
+                Console.WriteLine("Add deal? Y/N");
+                var createDeal = Console.ReadLine();
+
+                if (createDeal.ToUpper() == "Y")
+                {
+                    HandleDeal();
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        private static void HandleDeal()
+        {
+            Console.WriteLine("Product data sale code:");
+            var saleCode = Console.ReadLine();
+
+            if (productList.Count(product => product.SaleCode == saleCode) > 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Product \"" + saleCode + "\" already exists!");
+                Console.ResetColor();
+                return;
+            }
+
+            Console.WriteLine("Product data name:");
+            var name = Console.ReadLine();
+
+            Console.WriteLine("Product data description:");
+            var description = Console.ReadLine();
+
+            Program.AddCatalogueItem(saleCode, null, Program.PageId, 0);
+
+            while (true)
+            {
+                Console.WriteLine("Deal sprite name:");
+                var spriteName = Console.ReadLine();
+
+                if (!Program.HasItemEntry(spriteName))
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Product \"" + spriteName + "\" doesn't exist!");
+                    Console.ResetColor();
                     continue;
                 }
 
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Added \"" + item.FileName + "\" to new productdata!");
-                Console.ResetColor();
+                var definitionId = Program.GetItemEntryId(spriteName);
 
-                productList.Add(new ProductDataEntry(item.FileName, item.Name, item.Description, ""));
+                Console.WriteLine("Deal amount:");
+                var spriteAmount = int.Parse(Console.ReadLine());
+
+                Console.WriteLine("Add another item? Y/N");
+                var nextItem = Console.ReadLine();
+
+                Program.SQLBuilder.Append("INSERT INTO `catalogue_packages` (`salecode`, `definition_id`, `special_sprite_id`, `amount`) VALUES ('" + saleCode + "', '" + definitionId + "', 0, '" + spriteAmount + "');");
+                Program.SQLBuilder.Append("\n");
+                Program.SQLBuilder.Append("\n");
+
+                if (nextItem.ToUpper() == "N")
+                {
+                    break;
+                }
             }
 
-            WriteProducts(Program.OUTPUT_DIR + "productdata.txt", productList);
+            productList.Add(new ProductDataEntry(saleCode, name, description, ""));
         }
 
-        private static void WriteProducts(string outputFile, List<ProductDataEntry> productList)
+        public static void WriteProducts(string outputFile)
         {
             List<string> productDataList = new List<string>();
 

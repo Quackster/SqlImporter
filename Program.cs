@@ -66,15 +66,38 @@ namespace SqlImporter
 
     class Program
     {
+        private static StringBuilder sqlOutput = new StringBuilder();
         private static List<FurniItem> itemList = new List<FurniItem>();
         private static List<FurniItem> officialItemList = new List<FurniItem>();
+
+        private static int nextCatalogueItemsId;
+        private static int nextItemsDefinitionsId;
+
+        public static StringBuilder SQLBuilder
+        {
+            get { return sqlOutput; }
+        }
+
+        public static int NextCatalogueId
+        {
+            get { return nextCatalogueItemsId; }
+            set { nextCatalogueItemsId = value; }
+        }
+
+        public static int NextDefinitionId
+        {
+            get { return nextItemsDefinitionsId; }
+            set { nextItemsDefinitionsId = value; }
+        }
+
         internal static string OUTPUT_DIR = "data/";
+        internal static int PageId;
 
         static void Main(string[] args)
         {
             try
             {
-                var fileContents = File.ReadAllText(OUTPUT_DIR + "old_furnidata.txt");
+                var fileContents = File.ReadAllText(OUTPUT_DIR + "old_data/furnidata.txt");
                 var furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
 
                 foreach (var stringArray in furnidataList)
@@ -90,22 +113,16 @@ namespace SqlImporter
                     officialItemList.Add(new FurniItem(stringArray));
                 }
 
-
-                int nextCatalogueItemsId;
-                int nextItemsDefinitionsId;
-                int nextPageId;
-
                 using (var connection = GetConnection())
                 {
                     nextCatalogueItemsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_items'");
                     nextItemsDefinitionsId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'items_definitions'");
-                    nextPageId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_pages'") - 1;
+                    PageId = connection.QueryFirst<int>("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_NAME = 'catalogue_pages'") - 1;
 
                     Console.WriteLine("Query success: " + nextItemsDefinitionsId + " / " + nextCatalogueItemsId);
                 }
 
                 FurniItem previousItem = null;
-                StringBuilder sqlOutput = new StringBuilder();
 
                 List<string> processQueue = new List<string>();
                 List<FurniItem> processedFurni = new List<FurniItem>();
@@ -139,19 +156,24 @@ namespace SqlImporter
                             for (int i = minimumRange; i <= maximumRange; i++)
                             {
                                 var newClass = className.Replace("#" + minimumRange + "-" + maximumRange, "*" + i);
-                                processQueue.Add(newClass);
+
+                                if (!processQueue.Contains(newClass)) 
+                                    processQueue.Add(newClass);
 
                             }
                         }
                         else
                         {
                             className = className.Replace("#", "*");
-                            processQueue.Add(className);
+  
+                            if (!processQueue.Contains(className))
+                                processQueue.Add(className);
                         }
                     }
                     else
                     {
-                        processQueue.Add(className);
+                        if (!processQueue.Contains(className))
+                            processQueue.Add(className);
                     }
                     //Console.WriteLine(Path.GetFileName(file));
                 }
@@ -200,12 +222,10 @@ namespace SqlImporter
                             else
                             {
                                 var newFurni = new FurniItem(spriteData.RawData);
-                                bool recalculatedSpriteId = false;
 
                                 if (itemList.Count(item => item.SpriteId == spriteData.SpriteId) > 0)
                                 {
                                     newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
-                                    recalculatedSpriteId = true;
                                 }
 
                                 Console.ForegroundColor = ConsoleColor.DarkYellow;
@@ -240,15 +260,9 @@ namespace SqlImporter
                             sqlOutput.Append("\n");
                             sqlOutput.Append("\n");
 
-                            sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
-                                "VALUES (" + catalogueItemsId + ", '" + spriteData.FileName + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " + defId + ", '', 0);");
-
-                            sqlOutput.Append("\n");
-                            sqlOutput.Append("\n");
-
-
+                            AddCatalogueItem(null, spriteData, PageId, nextCatalogueItemsId);
                             nextItemsDefinitionsId++;
-                            nextCatalogueItemsId++;
+
 
                             previousItem = spriteData;
                         }
@@ -257,7 +271,32 @@ namespace SqlImporter
                     }
                 }
 
+
+
                 ProductData.AddItems(processedFurni);
+                ProductData.HandleDeals();
+                ProductData.WriteProducts(Program.OUTPUT_DIR + "productdata.txt");
+
+                var sortedItems = ProductData.Items.Where(item => processQueue.Contains(item.SaleCode) && item.SaleCode.Length > 0).ToList().OrderBy(item => item.SaleCode).ToList();
+
+                int orderId = 0;
+
+
+                Console.WriteLine("Order ID start (blank for 0):");
+                var orderIdValue = Console.ReadLine();
+
+                if (orderIdValue.Length > 0)
+                {
+                    orderId = int.Parse(orderIdValue);
+                }
+
+                foreach (var item in sortedItems)
+                {
+                    sqlOutput.Append("UPDATE catalogue_items SET order_id = '" + orderId++ + "' WHERE sale_code = '" + item.SaleCode + "';");
+
+                    sqlOutput.Append("\n");
+                    sqlOutput.Append("\n");
+                }
 
                 File.WriteAllText(OUTPUT_DIR + "items.sql", sqlOutput.ToString());
                 RebuildFurnidata(itemList, OUTPUT_DIR + "furnidata.txt");
@@ -271,7 +310,18 @@ namespace SqlImporter
             Console.Read();
         }
 
-        private static bool HasItemEntry(string className)
+        public static void AddCatalogueItem(string saleCode, FurniItem spriteData, int nextPageId, int definitionId)
+        {
+            sqlOutput.Append("INSERT INTO `catalogue_items` (`id`, `sale_code`, `page_id`, `order_id`, `price_coins`, `price_pixels`, `hidden`, `amount`, `definition_id`, `item_specialspriteid`, `is_package`) " +
+            "VALUES (" + NextCatalogueId + ", '" + (saleCode == null ? spriteData.FileName : saleCode) + "', '" + nextPageId + "', 2, 2, 0, 0, 1, " + definitionId + ", '', 0);");
+
+            sqlOutput.Append("\n");
+            sqlOutput.Append("\n"); 
+            
+            nextCatalogueItemsId++;
+        }
+
+        public static bool HasItemEntry(string className)
         {
             using (var connection = GetConnection())
             {
@@ -279,6 +329,17 @@ namespace SqlImporter
                 queryParameters.Add("@sprite", className);
 
                 return connection.QueryFirstOrDefault<string>("SELECT behaviour FROM items_definitions WHERE sprite = @sprite", queryParameters) != null;
+            }
+        }
+
+        public static int GetItemEntryId(string className)
+        {
+            using (var connection = GetConnection())
+            {
+                var queryParameters = new DynamicParameters();
+                queryParameters.Add("@sprite", className);
+
+                return connection.QueryFirstOrDefault<int>("SELECT id FROM items_definitions WHERE sprite = @sprite", queryParameters);
             }
         }
 
