@@ -294,7 +294,8 @@ namespace SqlImporter
                 ProductData.HandleDeals();
                 ProductData.WriteProducts(Program.OUTPUT_DIR + "productdata.txt");
 
-                var sortedItems = ProductData.Items.Where(item => processQueue.Contains(item.SaleCode) && item.SaleCode.Length > 0).ToList().OrderBy(item => item.SaleCode).ToList();
+                List<string> processedOrderQueue = new List<string>();
+                var sortedItems = ProductData.Items.Where(item => processQueue.Contains(item.SaleCode) && item.SaleCode.Length > 0).ToList().ToList();
 
                 int orderId = 0;
 
@@ -309,10 +310,13 @@ namespace SqlImporter
 
                 foreach (var item in sortedItems)
                 {
-                    sqlOutput.Append("UPDATE catalogue_items SET order_id = '" + orderId++ + "' WHERE sale_code = '" + item.SaleCode + "';");
-
-                    sqlOutput.Append("\n");
-                    sqlOutput.Append("\n");
+                    if (processedOrderQueue.Count(i => i == item.SaleCode) == 0)
+                    {
+                        sqlOutput.Append("UPDATE catalogue_items SET order_id = '" + orderId++ + "' WHERE sale_code = '" + item.SaleCode + "';");
+                        sqlOutput.Append("\n");
+                        sqlOutput.Append("\n");
+                        processedOrderQueue.Add(item.SaleCode);
+                    }
                 }
 
                 File.WriteAllText(OUTPUT_DIR + "items.sql", sqlOutput.ToString());
