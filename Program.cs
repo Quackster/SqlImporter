@@ -192,11 +192,6 @@ namespace SqlImporter
 
                     if (spriteData == null)
                     {
-                        if (className == "ads_711c")
-                        {
-                            var test = 1;
-                        }
-
                         string newFurniName;
                         spriteData = RetryFindSprite(className, out newFurniName);
 
@@ -334,6 +329,8 @@ namespace SqlImporter
 
         private static FurniItem RetryFindSprite(string className, out string newFurniName)
         {
+            FurniItem sprite = null;
+
             List<string> suffixes = new List<string>();
             suffixes.Add("cmp");
             suffixes.Add("_cmp");
@@ -350,7 +347,7 @@ namespace SqlImporter
                     continue;
 
                 newFurniName = className.Substring(0, className.Length - suffix.Length);
-                var sprite = RetrieveSpriteData(newFurniName, itemList);
+                sprite = RetrieveSpriteData(newFurniName, itemList);
 
                 if (sprite != null)
                 {
@@ -366,6 +363,13 @@ namespace SqlImporter
             }
 
             newFurniName = className;
+            sprite = RetrieveSpriteData(newFurniName, officialItemList);
+
+            if (sprite != null)
+            {
+                return sprite;
+            }
+
             return null;
         }
 
