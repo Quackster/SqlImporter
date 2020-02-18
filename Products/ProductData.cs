@@ -56,13 +56,14 @@ namespace SqlImporter.Products
 
             foreach (var item in items)
             {
-                if (productList.Count(product => product.SaleCode == item.FileName) > 0)
+                /*if (productList.Count(product => product.SaleCode == item.FileName) > 0)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("Product \"" + item.FileName + "\" already exists!");
                     Console.ResetColor();
                 }
-                else
+                else*/
+                if (!(productList.Count(product => product.SaleCode == item.FileName) > 0))
                 {
 
                     Console.ForegroundColor = ConsoleColor.Green;

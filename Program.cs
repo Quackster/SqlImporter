@@ -106,6 +106,7 @@ namespace SqlImporter
                 }
 
                 var officialFileContents = File.ReadAllText(OUTPUT_DIR + "official_furnidata.txt");
+                officialFileContents = officialFileContents.Replace("]]\r\n[[", "],[");
                 var officialFurnidataList = JsonConvert.DeserializeObject<List<string[]>>(officialFileContents);
 
                 foreach (var stringArray in officialFurnidataList)
@@ -124,7 +125,9 @@ namespace SqlImporter
 
                 FurniItem previousItem = null;
 
+                List<string> badApples = new List<string>();
                 List<string> processQueue = new List<string>();
+
                 List<FurniItem> processedFurni = new List<FurniItem>();
 
                 foreach (var file in Directory.GetFiles("ccts"))
@@ -189,22 +192,22 @@ namespace SqlImporter
 
                     if (spriteData == null)
                     {
-                        var originalFileName = className;
-                        var newFurniName = className.Replace("_cmp", "").Replace("_camp", "");
-
-                        if (newFurniName.EndsWith("cmp"))
+                        if (className == "ads_711c")
                         {
-                            newFurniName = newFurniName.TrimEnd("cmp".ToCharArray());
+                            var test = 1;
                         }
 
-                        spriteData = RetrieveSpriteData(newFurniName, officialItemList);
+                        string newFurniName;
+                        spriteData = RetryFindSprite(className, out newFurniName);
+
+                        //spriteData = RetrieveSpriteData(newFurniName, officialItemList);
 
                         if (spriteData != null)
                         {
-                            if (originalFileName != newFurniName)
+                            if (className != newFurniName)
                             {
                                 var newFurni = new FurniItem(spriteData.RawData);
-                                newFurni.FileName = originalFileName;
+                                newFurni.FileName = className;
                                 newFurni.SpriteId = GetNextAvaliableSpriteId(spriteData.SpriteId);
 
                                 if (itemList.Count(item => item.SpriteId == spriteData.SpriteId) > 0)
@@ -213,7 +216,7 @@ namespace SqlImporter
                                 }
 
                                 Console.ForegroundColor = ConsoleColor.DarkYellow;
-                                Console.WriteLine("The furniture \"" + originalFileName + "\" was missing but has now been added");
+                                Console.WriteLine("The furniture \"" + className + "\" was missing but has now been added");
                                 Console.ResetColor();
 
                                 spriteData = newFurni;
@@ -229,7 +232,7 @@ namespace SqlImporter
                                 }
 
                                 Console.ForegroundColor = ConsoleColor.DarkYellow;
-                                Console.WriteLine("The furniture \"" + originalFileName + "\" was missing but added and sprite id has been recalulated");
+                                Console.WriteLine("The furniture \"" + className + "\" was missing but added and sprite id has been recalulated");
                                 Console.ResetColor();
 
                                 spriteData = newFurni;
@@ -238,19 +241,21 @@ namespace SqlImporter
                         }
                     }
 
-                    if (spriteData == null)
+                    if (spriteData != null)
                     {
-                        Console.WriteLine("Next sprite ID: " + GetNextAvaliableSpriteId(previousItem != null ? previousItem.SpriteId : 1000));
-                        Console.WriteLine("The furni " + className + " has no furnidata");
-                    }
-                    else
-                    {
-                        if (HasItemEntry(className))
+                        /*if (spriteData == null)
                         {
-                            Console.WriteLine("The entry for " + className + " already exists in the database");
+                            Console.WriteLine("Next sprite ID: " + GetNextAvaliableSpriteId(previousItem != null ? previousItem.SpriteId : 1000));
+                            Console.WriteLine("The furni " + className + " has no furnidata");
                         }
                         else
+                        {*/
+                        if (!HasItemEntry(className))
                         {
+                            /*   Console.WriteLine("The entry for " + className + " already exists in the database");
+                           }
+                           else
+                           {*/
                             int defId = nextItemsDefinitionsId;
                             int catalogueItemsId = nextCatalogueItemsId;
 
@@ -260,20 +265,37 @@ namespace SqlImporter
                             sqlOutput.Append("\n");
                             sqlOutput.Append("\n");
 
-                            AddCatalogueItem(null, spriteData, PageId, nextCatalogueItemsId);
+                            AddCatalogueItem(null, spriteData, PageId, nextItemsDefinitionsId);
                             nextItemsDefinitionsId++;
-
 
                             previousItem = spriteData;
                         }
 
                         processedFurni.Add(spriteData);
+                        //}
+                    }
+                    else
+                    {
+                        badApples.Add(className);
                     }
                 }
 
-
-
                 ProductData.AddItems(processedFurni);
+
+                if (badApples.Count > 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Blue;
+                    Console.WriteLine("The following were bad apples:");
+
+                    foreach (string className in badApples)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine(className);
+                    }
+                    
+                    Console.ResetColor();
+                }
+
                 ProductData.HandleDeals();
                 ProductData.WriteProducts(Program.OUTPUT_DIR + "productdata.txt");
 
@@ -308,6 +330,79 @@ namespace SqlImporter
 
             Console.WriteLine("Done!");
             Console.Read();
+        }
+
+        private static FurniItem RetryFindSprite(string className, out string newFurniName)
+        {
+            List<string> suffixes = new List<string>();
+            suffixes.Add("cmp");
+            suffixes.Add("_cmp");
+            suffixes.Add("camp");
+            suffixes.Add("_camp");
+            suffixes.Add("campaign");
+            suffixes.Add("_campaign");
+            suffixes.Add("c");
+            suffixes.Add("_c");
+
+            foreach (var suffix in suffixes)
+            {
+                if (!className.EndsWith(suffix))
+                    continue;
+
+                newFurniName = className.Substring(0, className.Length - suffix.Length);
+                var sprite = RetrieveSpriteData(newFurniName, itemList);
+
+                if (sprite != null)
+                {
+                    return sprite;
+                }
+
+                sprite = RetrieveSpriteData(newFurniName, officialItemList);
+
+                if (sprite != null)
+                {
+                    return sprite;
+                }
+            }
+
+            newFurniName = className;
+            return null;
+        }
+
+        private static FurniItem RetrieveSpriteData(string className, List<FurniItem> itemList)
+        {
+            foreach (var item in itemList)
+            {
+                if (item.FileName == null)
+                {
+                    continue;
+                }
+
+                if (item.FileName.Equals(className, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        private static int GetNextAvaliableSpriteId(int startId)
+        {
+            int i = startId;
+
+            while (true)
+            {
+                if (itemList.Count(item => item.SpriteId == i) > 0)
+                {
+                    i++;
+                }
+                else
+                {
+                    itemList.Add(new FurniItem(i));
+                    return i;
+                }
+            }
         }
 
         public static void AddCatalogueItem(string saleCode, FurniItem spriteData, int nextPageId, int definitionId)
@@ -367,41 +462,6 @@ namespace SqlImporter
         private static string Escape(string name)
         {
             return name.Replace("'", "\\'");
-        }
-
-        private static FurniItem RetrieveSpriteData(string className, List<FurniItem> itemList)
-        {
-            foreach (var item in itemList)
-            {
-                if (item.FileName == null)
-                {
-                    continue;
-                }
-
-                if (item.FileName.Equals(className, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return item;
-                }
-            }
-
-            return null;
-        }
-
-        private static int GetNextAvaliableSpriteId(int startId)
-        {
-            int i = startId;
-
-            while (true)
-            {
-                if (itemList.Count(item => item.SpriteId == i) > 0)
-                {
-                    i++;
-                } else
-                {
-                    itemList.Add(new FurniItem(i));
-                    return i;
-                }
-            }
         }
 
         public static IDbConnection GetConnection()
