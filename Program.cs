@@ -107,6 +107,7 @@ namespace SqlImporter
 
                 var officialFileContents = File.ReadAllText(OUTPUT_DIR + "official_furnidata.txt");
                 officialFileContents = officialFileContents.Replace("]]\r\n[[", "],[");
+                officialFileContents = officialFileContents.Replace("]]\n[[", "],[");
                 var officialFurnidataList = JsonConvert.DeserializeObject<List<string[]>>(officialFileContents);
 
                 foreach (var stringArray in officialFurnidataList)
