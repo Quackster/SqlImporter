@@ -15,19 +15,25 @@ namespace SqlImporter.Products
         public string Name;
         public string Description;
         public string GraphicsData;
+
         public ProductDataEntry(string saleCode, string name, string description, string graphicsData)
         {
-            SaleCode = ProductData.Strip(saleCode);
-            Name = ProductData.Strip(name);
-            Description = ProductData.Strip(description);
-            GraphicsData = ProductData.Strip(graphicsData);
+            SaleCode = Strip(saleCode);
+            Name = Strip(name).Replace("\"&QUOTE&\"", "\"");
+            Description = Strip(description).Replace("\"&QUOTE&\"", "\"");
+            GraphicsData = Strip(graphicsData);
+        }
+
+        public static string Strip(string value)
+        {
+            return value.Length > 1 ? value.Substring(1, value.Length - 2) : string.Empty;
         }
 
         public string[] Output
         {
             get
             {
-                return new string[] { SaleCode, Name, Description.Replace("&QUOTE&", "\"&QUOTE&\""), GraphicsData };
+                return new string[] { SaleCode, Name.Replace("\"", "\"&QUOTE&\""), Description.Replace("\"", "\"&QUOTE&\""), GraphicsData };
             }
         }
 
@@ -70,7 +76,7 @@ namespace SqlImporter.Products
                     Console.WriteLine("Added \"" + item.FileName + "\" to new productdata!");
                     Console.ResetColor();
                     
-                    productList.Add(new ProductDataEntry(item.FileName, item.Name, item.Description, ""));
+                    productList.Add(new ProductDataEntry("\"" + item.FileName + "\"", "\"" + item.Name + "\"", "\"" + item.Description + "\"", ""));
                 }
 
                 
@@ -186,35 +192,34 @@ namespace SqlImporter.Products
             fileContents = fileContents.Replace("]]", "]");
             fileContents = fileContents.Replace("[[", "[");
             fileContents = fileContents.Replace("],[", "]|[");
-            fileContents = fileContents.Replace("\"&QUOTE&\"", "&QUOTE&");
+            //fileContents = fileContents.Replace("\"&QUOTE&\"", "\"");
 
-            foreach (string productRaw in fileContents.Split('|'))
+            string[] chunks = Regex.Split(fileContents, "\n\r{1,}|\n{1,}|\r{1,}", RegexOptions.Multiline);
+            foreach (string chunk in chunks)
             {
-                if (productRaw.Count(f => f == '"') > 8)
+                MatchCollection collection = Regex.Matches(chunk, @"\[+?((.)*?)\]");
+                foreach (Match item in collection)
                 {
-                    Console.WriteLine("Warning! The following item has more than 8 double quotes, use \"&QUOTE&\" when using quotes.");
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(productRaw);
-                    Console.ResetColor();
-                    continue;
+
+                    string itemData = item.Value;
+                    List<string> splitted = new List<string>();
+
+                    itemData = itemData.Substring(1, itemData.Length - 2);
+                    itemData = itemData.Replace("\",\"", "\"|\"");
+
+                    string[] matches = itemData.Split('|');
+
+
+                    var entry = new ProductDataEntry(
+                        matches[0],
+                        matches[1],
+                        matches[2],
+                        matches[3]);
+
+                    productList.Add(entry);
+
+
                 }
-
-                var newProduct = productRaw;
-                newProduct = newProduct.TrimStart('[');
-                newProduct = newProduct.TrimEnd(']');
-
-                var reg = new Regex("\".*?\"");
-                var matches = reg.Matches(newProduct);
-
-                var entry = new ProductDataEntry(
-                    matches[0].Value,
-                    matches[1].Value,
-                    matches[2].Value,
-                    matches[3].Value);
-
-                productList.Add(entry);
-
-                
             }
 
             Console.WriteLine("Read " + productList.Count + " products!");
@@ -226,11 +231,6 @@ namespace SqlImporter.Products
             {
                 yield return locations.GetRange(i, Math.Min(nSize, locations.Count - i));
             }
-        }
-
-        public static string Strip(string value)
-        {
-            return value.Replace("\"", "");
         }
     }
 }

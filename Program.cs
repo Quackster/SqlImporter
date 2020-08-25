@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using SqlImporter.Products;
+using System.Text.RegularExpressions;
 
 namespace SqlImporter
 {
@@ -28,7 +29,10 @@ namespace SqlImporter
         {
             get
             {
-                return new string[] { Type, Convert.ToString(SpriteId), FileName, Revision, Unknown, Length == -1 ? "" : Convert.ToString(Length), Width == -1 ? "" : Convert.ToString(Width), Colour, Name, Description };
+                return new string[] { Type, Convert.ToString(SpriteId), FileName, Revision, Unknown, Length == -1 ? "" : Convert.ToString(Length), Width == -1 ? "" : Convert.ToString(Width), Colour,
+                    Name.Replace("\"", "\"&QUOTE&\""),
+                    Description.Replace("\"", "\"&QUOTE&\"")
+                };
             }
         }
 
@@ -53,8 +57,12 @@ namespace SqlImporter
             }
 
             this.Colour = data[7];
-            this.Name = data[8];
-            this.Description = data[9];
+            /*
+            this.Name = data[8].Replace("\"", "\"&QUOTE&\"");
+            this.Description = data[9].Replace("\"", "\"&QUOTE&\"");
+            */
+            this.Name = data[8].Replace("\"&QUOTE&\"", "\"");
+            this.Description = data[9].Replace("\"&QUOTE&\"", "\"");
         }
 
         public FurniItem(int SpriteId)
@@ -98,12 +106,56 @@ namespace SqlImporter
             try
             {
                 var fileContents = File.ReadAllText(OUTPUT_DIR + "old_data/furnidata.txt");
+
+                //fileContents = fileContents.Replace("]]\r\n[[", "],[");
+                //fileContents = fileContents.Replace("]]\n[[", "],[");
+                fileContents = fileContents.Substring(1, fileContents.Length - 2);
+
+                /*fileContents = fileContents.Replace("\"\"", "\"&QUOTE&");
+                fileContents = fileContents.Replace("\"\"", "\"&QUOTE&");
+
                 var furnidataList = JsonConvert.DeserializeObject<List<string[]>>(fileContents);
 
                 foreach (var stringArray in furnidataList)
                 {
                     itemList.Add(new FurniItem(stringArray));
+                }*/
+
+                string[] chunks = Regex.Split(fileContents, "\n\r{1,}|\n{1,}|\r{1,}", RegexOptions.Multiline);
+                foreach (string chunk in chunks)
+                {
+                    MatchCollection collection = Regex.Matches(chunk, @"\[+?((.)*?)\]");
+                    foreach (Match item in collection)
+                    {
+
+                        string itemData = item.Value;
+
+                        try
+                        {
+   
+                            /*itemData = Regex.Replace(itemData, @"/\[{1,}/mg", "");
+                            itemData = Regex.Replace(itemData, @"/\[{1,}/mg", "");
+                            */
+
+                            List<string> splitted = new List<string>();
+
+                            itemData = itemData.Substring(1, itemData.Length - 2);
+                            itemData = itemData.Replace("\",\"", "\"|\"");
+
+                            string[] splitData = itemData.Split('|').Select(x => x.Length > 1 ? x.Substring(1, x.Length - 2) : string.Empty).ToArray();
+
+
+
+                            itemList.Add(new FurniItem(splitData));
+                        }
+                        catch (Exception ex)
+                        {
+                            return;
+                        }
+                    }
                 }
+
+
 
                 var officialFileContents = File.ReadAllText(OUTPUT_DIR + "official_furnidata.txt");
                 officialFileContents = officialFileContents.Replace("]]\r\n[[", "],[");
@@ -181,6 +233,16 @@ namespace SqlImporter
                     }
                     //Console.WriteLine(Path.GetFileName(file));
                 }
+
+                // Maroon Furni
+                /*foreach (var item in officialItemList)
+                {
+                    if (item.Name.StartsWith("Maroon"))
+                    {
+                        item.Colour = item.Colour.ToUpper();
+                        processQueue.Add(item.FileName);
+                    }
+                }*/
 
                 foreach (var className in processQueue)
                 {
